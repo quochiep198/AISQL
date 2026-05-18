@@ -1,0 +1,7 @@
+fastapi
+pydantic
+uvicorn
+python-dotenv
+openai
+psycopg[binary]
+PyMySQL

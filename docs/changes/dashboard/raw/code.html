@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0e1417;
+            color: #dde3e7;
+        }
+        .code-font {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #161d1f;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #3c494e;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #859399;
+        }
+        .syntax-keyword { color: #ffba49; }
+        .syntax-function { color: #4cd6ff; }
+        .syntax-string { color: #b7c8e1; }
+        .syntax-comment { color: #62727b; }
+        .syntax-number { color: #feb127; }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-container": "#00d1ff",
+                        "primary": "#a4e6ff",
+                        "tertiary-fixed-dim": "#ffba49",
+                        "tertiary": "#ffd59c",
+                        "surface-container": "#1a2123",
+                        "on-tertiary-fixed": "#291800",
+                        "secondary-container": "#3a4a5f",
+                        "on-surface": "#dde3e7",
+                        "inverse-primary": "#00677f",
+                        "on-primary-container": "#00566a",
+                        "on-tertiary-fixed-variant": "#624000",
+                        "surface-container-low": "#161d1f",
+                        "on-error": "#690005",
+                        "surface-container-lowest": "#090f12",
+                        "on-primary-fixed-variant": "#004e60",
+                        "secondary": "#b7c8e1",
+                        "on-background": "#dde3e7",
+                        "on-secondary-fixed": "#0b1c30",
+                        "on-tertiary": "#442b00",
+                        "tertiary-container": "#feb127",
+                        "inverse-surface": "#dde3e7",
+                        "on-surface-variant": "#bbc9cf",
+                        "inverse-on-surface": "#2b3134",
+                        "error-container": "#93000a",
+                        "surface-container-high": "#242b2e",
+                        "surface-container-highest": "#2f3639",
+                        "outline-variant": "#3c494e",
+                        "error": "#ffb4ab",
+                        "on-error-container": "#ffdad6",
+                        "on-secondary-container": "#a9bad3",
+                        "primary-fixed-dim": "#4cd6ff",
+                        "background": "#0e1417",
+                        "on-primary": "#003543",
+                        "surface-tint": "#4cd6ff",
+                        "on-secondary-fixed-variant": "#38485d",
+                        "secondary-fixed-dim": "#b7c8e1",
+                        "primary-fixed": "#b7eaff",
+                        "surface-bright": "#333a3d",
+                        "surface-dim": "#0e1417",
+                        "outline": "#859399",
+                        "on-secondary": "#213145",
+                        "on-primary-fixed": "#001f28",
+                        "secondary-fixed": "#d3e4fe",
+                        "tertiary-fixed": "#ffddb1",
+                        "surface": "#0e1417",
+                        "on-tertiary-container": "#6b4700",
+                        "surface-variant": "#2f3639"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "lg": "24px",
+                        "xs": "4px",
+                        "sm": "8px",
+                        "sidebar-width": "280px",
+                        "xl": "32px",
+                        "base": "4px",
+                        "md": "16px",
+                        "gutter": "1px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Inter"],
+                        "code-md": ["JetBrains Mono"],
+                        "code-sm": ["JetBrains Mono"],
+                        "headline-md": ["Inter"],
+                        "label-md": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                        "code-md": ["14px", {"lineHeight": "22px", "fontWeight": "400"}],
+                        "code-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+                        "headline-md": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                        "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-surface overflow-hidden">
+<!-- TopNavBar -->
+<header class="bg-surface border-b border-outline-variant flex justify-between items-center w-full px-md h-16 z-50 fixed top-0">
+<div class="flex items-center gap-md">
+<span class="font-headline-md text-headline-md font-bold text-primary-container">QueryOptima</span>
+</div>
+<div class="flex items-center gap-md">
+<div class="relative hidden lg:block">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+<input class="bg-surface-container-low border border-outline-variant rounded px-xl py-1.5 text-body-sm font-body-sm w-64 focus:border-primary-container outline-none transition-all" placeholder="Tìm kiếm tài liệu..." type="text"/>
+</div>
+<button class="material-symbols-outlined text-on-surface-variant hover:bg-surface-container-high p-2 rounded-full transition-colors">notifications</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:bg-surface-container-high p-2 rounded-full transition-colors">settings</button>
+<div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center overflow-hidden border border-outline">
+<img alt="User profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDNyQtT0XGScO0IUEeamA43oWXWEiCyypLx_P9nVdBxKSLTo79IuOMZl59MiSLPtPsd2b0K7e0BqtIxYYpMx4HKjnKPapRPQ0MVz7heebznM5GA8YJqr8vl2R3DnDel2ii1zF3VniOHKDs2YwPjE3QvF6Qsp0YBrJ0SHhWg43prcsDI-7IRrNgpXjrMUy3mI3wszQmW-0ykJa3Kg1gjT1j8tmE13crL6GmQ4LGBcNnISG4qpYUAyoh45Vexuo0tbNkPGAm1hBKxXsRw"/>
+</div>
+</div>
+</header>
+<div class="flex h-screen pt-16">
+<!-- SideNavBar -->
+<aside class="bg-surface-container-low border-r border-outline-variant flex flex-col h-full py-md px-sm gap-sm w-sidebar-width shrink-0">
+<div class="px-md mb-md">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">terminal</span>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md text-primary leading-none">SQL/NoSQL</h2>
+<p class="font-label-md text-label-md text-on-surface-variant opacity-70">Optimization Engine</p>
+</div>
+</div>
+</div>
+<button class="mx-sm mb-md bg-primary-container text-on-primary-container font-label-md text-label-md py-2.5 rounded-lg font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-all">
+<span class="material-symbols-outlined text-[20px]">add</span>
+                New Workspace
+            </button>
+<nav class="flex flex-col gap-1">
+<a class="flex items-center gap-md px-md py-3 text-on-surface-variant font-label-md text-label-md hover:bg-surface-container-highest hover:text-on-surface duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="database">database</span>
+                    Schema
+                </a>
+<a class="flex items-center gap-md px-md py-3 text-on-surface-variant font-label-md text-label-md hover:bg-surface-container-highest hover:text-on-surface duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="speed">speed</span>
+                    Benchmarks
+                </a>
+</nav>
+<div class="mt-auto border-t border-outline-variant pt-md">
+<a class="flex items-center gap-md px-md py-3 text-on-surface-variant font-label-md text-label-md hover:bg-surface-container-highest hover:text-on-surface" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+                    Support
+                </a>
+<a class="flex items-center gap-md px-md py-3 text-on-surface-variant font-label-md text-label-md hover:bg-surface-container-highest hover:text-on-surface" href="#">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+                    Logs
+                </a>
+</div>
+</aside>
+<!-- Main Workspace -->
+<main class="flex-1 flex flex-col overflow-hidden">
+<!-- Workspace Toolbar -->
+<div class="h-12 border-b border-outline-variant bg-surface flex items-center justify-between px-md shrink-0">
+<div class="flex items-center gap-md h-full">
+<div class="flex border-r border-outline-variant pr-md gap-xs">
+<button class="px-md py-1 text-label-md font-label-md border-b-2 border-primary-container text-primary">SQL</button>
+<button class="px-md py-1 text-label-md font-label-md text-on-surface-variant hover:text-on-surface">NoSQL</button>
+</div>
+<div class="flex items-center gap-sm">
+<span class="text-body-sm font-body-sm text-on-surface-variant">Database:</span>
+<div class="flex items-center gap-1 bg-surface-container-high px-2 py-1 rounded cursor-pointer">
+<span class="material-symbols-outlined text-[16px] text-tertiary">storage</span>
+<span class="text-body-sm font-body-sm">production_replica</span>
+<span class="material-symbols-outlined text-[16px]">expand_more</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-sm">
+<button class="flex items-center gap-2 px-md py-1.5 bg-primary-container text-on-primary-container rounded font-label-md text-label-md font-bold hover:brightness-110 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[18px]">bolt</span>
+                        Phân tích &amp; Tối ưu
+                    </button>
+</div>
+</div>
+<div class="flex-1 flex overflow-hidden">
+<!-- Editor Pane -->
+<div class="flex-1 border-r border-outline-variant flex flex-col bg-surface-container-lowest">
+<div class="flex-1 overflow-auto custom-scrollbar code-font text-code-md p-md relative">
+<div class="flex">
+<div class="w-10 text-right pr-4 text-on-surface-variant opacity-40 select-none">
+                                1<br/>2<br/>3<br/>4<br/>5<br/>6<br/>7<br/>8<br/>9<br/>10<br/>11<br/>12
+                            </div>
+<div class="flex-1 whitespace-pre">
+<span class="syntax-keyword">SELECT</span> p.product_name, p.category, <span class="syntax-function">SUM</span>(o.quantity) <span class="syntax-keyword">as</span> total_sold
+<span class="syntax-keyword">FROM</span> products p
+<span class="syntax-keyword">JOIN</span> orders o <span class="syntax-keyword">ON</span> p.id = o.product_id
+<span class="syntax-keyword">WHERE</span> o.order_date &gt; <span class="syntax-string">'2023-01-01'</span>
+<span class="syntax-keyword">AND</span> p.status = <span class="syntax-string">'active'</span>
+<span class="syntax-keyword">GROUP BY</span> p.product_name, p.category
+<span class="syntax-keyword">ORDER BY</span> total_sold <span class="syntax-keyword">DESC</span>;
+
+<span class="syntax-comment">-- Cần tối ưu hóa hiệu suất cho bảng orders có 50M records</span></div>
+</div>
+<!-- Vertical Ruler -->
+<div class="absolute top-0 left-[calc(10rem+80ch)] bottom-0 w-[1px] bg-outline-variant opacity-20 pointer-events-none"></div>
+</div>
+</div>
+<!-- Analysis Pane -->
+<div class="w-[450px] flex flex-col bg-surface overflow-y-auto custom-scrollbar">
+<!-- Critical Risks -->
+<section class="p-md border-b border-outline-variant">
+<div class="flex items-center justify-between mb-md">
+<h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-error">report</span>
+                                Rủi ro nghiêm trọng
+                            </h3>
+<span class="bg-error-container text-on-error-container text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">3 Cảnh báo</span>
+</div>
+<div class="space-y-sm">
+<div class="p-sm rounded border border-outline-variant bg-surface-container-low flex gap-md">
+<span class="material-symbols-outlined text-error text-[20px] shrink-0">error</span>
+<div>
+<p class="text-body-md font-bold text-on-surface">Thiếu Index (Missing Index)</p>
+<p class="text-body-sm text-on-surface-variant">Cột <code class="bg-surface-container-highest px-1 rounded">order_date</code> trong bảng <code class="bg-surface-container-highest px-1 rounded">orders</code> không được đánh index.</p>
+</div>
+</div>
+<div class="p-sm rounded border border-outline-variant bg-surface-container-low flex gap-md">
+<span class="material-symbols-outlined text-tertiary text-[20px] shrink-0">warning</span>
+<div>
+<p class="text-body-md font-bold text-on-surface">Full Table Scan</p>
+<p class="text-body-sm text-on-surface-variant">Truy vấn thực hiện quét toàn bộ bảng orders (50M+ dòng) do thiếu điều kiện lọc index hữu hiệu.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Performance Estimates -->
+<section class="p-md border-b border-outline-variant">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-md">Dự báo hiệu suất</h3>
+<div class="grid grid-cols-2 gap-sm">
+<div class="bg-surface-container-high p-md rounded border border-outline-variant text-center">
+<p class="text-label-md font-label-md text-on-surface-variant uppercase mb-1">Độ trễ (Latency)</p>
+<p class="text-headline-lg font-headline-lg text-error">4.2s</p>
+<p class="text-body-sm text-on-error opacity-70">Hiện tại</p>
+</div>
+<div class="bg-surface-container-high p-md rounded border border-outline-variant text-center">
+<p class="text-label-md font-label-md text-on-surface-variant uppercase mb-1">Tải CPU</p>
+<p class="text-headline-lg font-headline-lg text-tertiary">82%</p>
+<p class="text-body-sm text-on-tertiary-container opacity-70">Cao</p>
+</div>
+</div>
+<div class="mt-md bg-secondary-container/20 p-sm rounded-lg flex items-center justify-between border border-secondary-container/30">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">trending_up</span>
+<span class="text-body-sm font-bold text-primary">Cải thiện tiềm năng:</span>
+</div>
+<span class="text-headline-md font-headline-md text-primary-container">~95%</span>
+</div>
+</section>
+<!-- Optimized Version -->
+<section class="p-md">
+<div class="flex items-center justify-between mb-md">
+<h3 class="font-headline-md text-headline-md text-primary">Gợi ý tối ưu</h3>
+<button class="flex items-center gap-1 text-label-md font-label-md text-primary hover:underline transition-all">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+                                Sao chép
+                            </button>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md code-font text-code-sm overflow-x-auto">
+<span class="syntax-comment">-- 1. Create index on orders(order_date)</span>
+<span class="syntax-keyword">CREATE INDEX</span> idx_orders_date <span class="syntax-keyword">ON</span> orders(order_date);
+
+<span class="syntax-comment">-- 2. Optimized Query</span>
+<span class="syntax-keyword">SELECT</span> p.product_name, p.category, 
+       <span class="syntax-function">SUM</span>(o.quantity) <span class="syntax-keyword">FILTER</span> (<span class="syntax-keyword">WHERE</span> o.order_date &gt; <span class="syntax-string">'2023-01-01'</span>)
+<span class="syntax-keyword">FROM</span> products p
+<span class="syntax-keyword">INNER JOIN</span> orders o <span class="syntax-keyword">ON</span> p.id = o.product_id
+<span class="syntax-keyword">WHERE</span> p.status = <span class="syntax-string">'active'</span>
+<span class="syntax-keyword">AND</span> o.order_date &gt; <span class="syntax-string">'2023-01-01'</span>
+<span class="syntax-keyword">GROUP BY</span> p.id, p.product_name, p.category;
+                        </div>
+<div class="mt-md">
+<button class="w-full py-2 bg-secondary-container text-on-secondary-container rounded font-bold text-label-md hover:bg-on-secondary-fixed-variant transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[20px]">play_circle</span>
+                                Chạy thử bản tối ưu
+                            </button>
+</div>
+</section>
+</div>
+</div>
+</main>
+</div>
+<!-- Floating Action Button (Only on Home/Dashboard context) -->
+<button class="fixed bottom-lg right-lg w-14 h-14 bg-primary-container text-on-primary-container rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-[100]">
+<span class="material-symbols-outlined text-[28px]" style="font-variation-settings: 'FILL' 1;">auto_fix_high</span>
+</button>
+<script>
+        // Micro-interactions
+        document.querySelectorAll('nav a, aside nav a').forEach(link => {
+            link.addEventListener('click', (e) => {
+                if (link.href.includes('#')) {
+                    e.preventDefault();
+                    document.querySelectorAll('nav a, aside nav a').forEach(l => {
+                        l.classList.remove('bg-secondary-container', 'text-on-secondary-container', 'border-b-2', 'border-primary-container', 'text-primary');
+                        l.classList.add('text-on-surface-variant');
+                    });
+                    
+                    if (link.closest('aside')) {
+                        link.classList.add('bg-secondary-container', 'text-on-secondary-container');
+                        link.classList.remove('text-on-surface-variant');
+                    } else {
+                        link.classList.add('border-b-2', 'border-primary-container', 'text-primary');
+                        link.classList.remove('text-on-surface-variant');
+                    }
+                }
+            });
+        });
+
+        // Simple button active state visual feedback
+        const buttons = document.querySelectorAll('button');
+        buttons.forEach(btn => {
+            btn.addEventListener('mousedown', () => btn.style.opacity = '0.8');
+            btn.addEventListener('mouseup', () => btn.style.opacity = '1');
+            btn.addEventListener('mouseleave', () => btn.style.opacity = '1');
+        });
+    </script>
+</body></html>
