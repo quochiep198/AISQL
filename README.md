@@ -96,7 +96,8 @@ Neu khong bat AI review, he thong se fallback ve rule-based analyzer.
    - install: `cd frontend && npm install`
    - build: `cd frontend && npm run build`
    - output: `frontend/dist`
-   - API rewrite ve `api/index.py`
+   - route `/api/*` ve `api/index.py`
+   - route con lai fallback ve `frontend/dist/index.html`
 5. Them environment variables neu can:
    - `ENABLE_AI_REVIEW=false` cho rule-based only
    - `AI_PROVIDER=gemini` hoac `AI_PROVIDER=groq` hoac `AI_PROVIDER=claude`
