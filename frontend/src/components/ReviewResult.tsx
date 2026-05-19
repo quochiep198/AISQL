@@ -63,8 +63,12 @@ export function ReviewResult({ result }: Props) {
         ))}
       </ul>
 
-      <h3>Optimized query</h3>
-      {result.optimized_query ? <pre>{result.optimized_query}</pre> : <p>Chﾆｰa ﾄ黛ｻｧ thﾃｴng tin ﾄ黛ｻ・ﾄ黛ｻ・xu蘯･t query t盻訴 ﾆｰu an toﾃn.</p>}
+      {result.optimized_query ? (
+        <>
+          <h3>Optimized query</h3>
+          <pre>{result.optimized_query}</pre>
+        </>
+      ) : null}
 
       <h3>Notes / warnings</h3>
       <ul className="plain-list">

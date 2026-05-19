@@ -23,6 +23,7 @@ const initialPayload: ReviewRequest = {
   schema: "",
   indexes: "",
   optimization_goal: "speed",
+  ai_provider: null,
   connection_string: "",
   metadata_database_type: null,
   schema_name: "",
@@ -60,6 +61,34 @@ function highlightSql(query: string) {
     .replace(/\b(SUM|COUNT|AVG|MIN|MAX)\b/gi, '<span class="syntax-function">$1</span>');
 }
 
+function formatSql(query: string) {
+  const compact = query.replace(/\s+/g, " ").trim();
+  if (!compact) return "";
+
+  return compact
+    .replace(/\bSELECT\b/gi, "SELECT")
+    .replace(/\bFROM\b/gi, "\nFROM")
+    .replace(/\bWHERE\b/gi, "\nWHERE")
+    .replace(/\bGROUP BY\b/gi, "\nGROUP BY")
+    .replace(/\bORDER BY\b/gi, "\nORDER BY")
+    .replace(/\bLIMIT\b/gi, "\nLIMIT")
+    .replace(/\bOFFSET\b/gi, "\nOFFSET")
+    .replace(/\bHAVING\b/gi, "\nHAVING")
+    .replace(/\bINNER JOIN\b/gi, "\nINNER JOIN")
+    .replace(/\bLEFT JOIN\b/gi, "\nLEFT JOIN")
+    .replace(/\bRIGHT JOIN\b/gi, "\nRIGHT JOIN")
+    .replace(/\bFULL JOIN\b/gi, "\nFULL JOIN")
+    .replace(/\bJOIN\b/gi, "\nJOIN")
+    .replace(/\bUNION ALL\b/gi, "\nUNION ALL\n")
+    .replace(/\bUNION\b/gi, "\nUNION\n")
+    .replace(/\bON\b/gi, "\n  ON")
+    .replace(/\bAND\b/gi, "\n  AND")
+    .replace(/\bOR\b/gi, "\n  OR")
+    .replace(/,\s*/g, ",\n  ")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+}
+
 function getLatency(score: number) {
   if (score >= 80) return "180ms";
   if (score >= 60) return "820ms";
@@ -87,16 +116,73 @@ function getHealthClass(health: "checking" | "online" | "offline") {
   return "health-checking";
 }
 
+function getSeverityLabel(severity: ReviewResponse["issues"][number]["severity"]) {
+  switch (severity) {
+    case "critical":
+      return "nghiêm trọng";
+    case "high":
+      return "cao";
+    case "medium":
+      return "trung bình";
+    case "low":
+      return "thấp";
+    default:
+      return severity;
+  }
+}
+
+function getCategoryLabel(category: ReviewResponse["issues"][number]["category"]) {
+  switch (category) {
+    case "correctness":
+      return "độ chính xác";
+    case "performance":
+      return "hiệu năng";
+    case "maintainability":
+      return "bảo trì";
+    case "security":
+      return "bảo mật";
+    case "safety":
+      return "an toàn";
+    case "readability":
+      return "dễ đọc";
+    default:
+      return category;
+  }
+}
+
+function getDetectedTypeLabel(detectedType: string) {
+  switch (detectedType) {
+    case "select":
+      return "SELECT";
+    case "insert":
+      return "INSERT";
+    case "update":
+      return "UPDATE";
+    case "delete":
+      return "DELETE";
+    case "merge":
+      return "MERGE";
+    case "ddl":
+      return "DDL";
+    case "unknown":
+      return "không xác định";
+    default:
+      return detectedType;
+  }
+}
+
 export default function App() {
   const [payload, setPayload] = useState<ReviewRequest>(initialPayload);
   const [inspectConfig, setInspectConfig] = useState<DatabaseInspectRequest>(initialInspectConfig);
   const [inspectNotes, setInspectNotes] = useState<string[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"idle" | "checking" | "valid" | "invalid">("idle");
   const [connectionInfo, setConnectionInfo] = useState<ConnectionValidationResponse | null>(null);
+  const [isDatabasePanelOpen, setIsDatabasePanelOpen] = useState(true);
   const [result, setResult] = useState<ReviewResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [inspecting, setInspecting] = useState(false);
   const [error, setError] = useState("");
+  const [warningPopup, setWarningPopup] = useState("");
   const [health, setHealth] = useState<"checking" | "online" | "offline">("checking");
   const schemaSectionRef = useRef<HTMLElement | null>(null);
   const benchmarksSectionRef = useRef<HTMLElement | null>(null);
@@ -121,20 +207,31 @@ export default function App() {
     };
   }, []);
 
+  const hasConnectionString = Boolean(inspectConfig.connection_string.trim());
+  const requiresValidatedConnection = hasConnectionString && connectionStatus !== "valid";
+
   async function handleSubmit() {
     if (!payload.query.trim()) {
-      setError("Query is required");
+      setError("Vui lòng nhập câu truy vấn cần phân tích.");
       setResult(null);
+      return;
+    }
+
+    if (requiresValidatedConnection) {
+      setError("Vui lòng kiểm tra connection string hợp lệ trước khi phân tích.");
       return;
     }
 
     setLoading(true);
     setError("");
+    setWarningPopup("");
     setResult(null);
 
     try {
       const reviewPayload: ReviewRequest = {
         ...payload,
+        schema: hasConnectionString ? "" : payload.schema,
+        indexes: hasConnectionString ? "" : payload.indexes,
         connection_string: inspectConfig.connection_string,
         metadata_database_type: inspectConfig.database_type,
         schema_name: inspectConfig.schema_name,
@@ -145,7 +242,9 @@ export default function App() {
       const data = await reviewQuery(reviewPayload);
       setResult(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unexpected error");
+      const message = err instanceof Error ? err.message : "Đã xảy ra lỗi không mong muốn.";
+      setError(message);
+      setWarningPopup(message);
     } finally {
       setLoading(false);
     }
@@ -165,7 +264,7 @@ export default function App() {
       }));
       setInspectNotes(data.notes);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unexpected error");
+      setError(err instanceof Error ? err.message : "Đã xảy ra lỗi không mong muốn.");
     } finally {
       setInspecting(false);
     }
@@ -173,7 +272,7 @@ export default function App() {
 
   async function handleValidateConnection() {
     if (!inspectConfig.connection_string.trim()) {
-      setError("Connection string is required");
+      setError("Vui lòng nhập connection string.");
       setConnectionStatus("invalid");
       setConnectionInfo(null);
       return;
@@ -186,27 +285,43 @@ export default function App() {
     try {
       const data = await validateConnection(inspectConfig);
       setConnectionInfo(data);
-      setInspectConfig((current) => ({
-        ...current,
-        schema_name: current.schema_name || data.schema_name
-      }));
+      const nextConfig = {
+        ...inspectConfig,
+        schema_name: inspectConfig.schema_name || data.schema_name
+      };
+      setInspectConfig(nextConfig);
       setConnectionStatus("valid");
       setInspectNotes(data.notes);
+      setInspecting(true);
+      try {
+        const metadata = await inspectDatabase(nextConfig);
+        setPayload((current) => ({
+          ...current,
+          database_type: metadata.database_type,
+          schema: metadata.schema,
+          indexes: metadata.indexes
+        }));
+        setInspectNotes(metadata.notes);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Đã xảy ra lỗi không mong muốn.");
+      } finally {
+        setInspecting(false);
+      }
     } catch (err) {
       setConnectionStatus("invalid");
       setConnectionInfo(null);
-      setError(err instanceof Error ? err.message : "Unexpected error");
+      setError(err instanceof Error ? err.message : "Đã xảy ra lỗi không mong muốn.");
     }
   }
 
   async function handleCopy() {
-    const content = result?.optimized_query;
+    const content = hasResult && result?.optimized_query?.trim() ? formatSql(result.optimized_query) : null;
     if (!content) return;
 
     try {
       await navigator.clipboard.writeText(content);
     } catch {
-      setError("Copy failed");
+      setError("Không thể sao chép nội dung SQL.");
     }
   }
 
@@ -221,16 +336,25 @@ export default function App() {
   const lineCount = Math.max(payload.query.split(/\r?\n/).length, 12);
   const lineNumbers = Array.from({ length: lineCount }, (_, index) => index + 1);
   const editorHtml = useMemo(() => highlightSql(payload.query), [payload.query]);
+  const displayOptimizedQuery = useMemo(() => {
+    if (!hasResult) return "-- Chưa có SQL đề xuất";
+    if (result?.optimized_query?.trim()) return result.optimized_query;
+    return payload.query || "-- Chưa có SQL đề xuất";
+  }, [hasResult, payload.query, result?.optimized_query]);
+  const formattedOptimizedQuery = useMemo(
+    () => (result?.optimized_query?.trim() ? formatSql(displayOptimizedQuery) : ""),
+    [displayOptimizedQuery, result?.optimized_query]
+  );
   const optimizedHtml = useMemo(
-    () => highlightSql(result?.optimized_query ?? "-- No optimized query available"),
-    [result?.optimized_query]
+    () => (formattedOptimizedQuery ? highlightSql(formattedOptimizedQuery) : ""),
+    [formattedOptimizedQuery]
   );
 
   return (
     <div className="shell">
       <header className="topbar">
         <div className="topbar-brand">
-          <span className="brand-wordmark">QueryOptima</span>
+          <span className="brand-wordmark">SQL Performance Optimization</span>
         </div>
 
         {/* <div className="topbar-actions">
@@ -267,16 +391,126 @@ export default function App() {
             <span>New Workspace</span>
           </button> */}
 
-          {/* <nav className="sidebar-nav">
-            <button className="sidebar-nav-link" onClick={() => scrollToSection("schema")} type="button">
+          { <nav className="sidebar-nav">
+            <button
+              className={`sidebar-nav-link ${isDatabasePanelOpen ? "active" : ""}`}
+              onClick={() => setIsDatabasePanelOpen((current) => !current)}
+              type="button"
+            >
               <span className="material-symbols-outlined">database</span>
-              <span>Schema</span>
+              <span>Database</span>
+              <span className="material-symbols-outlined sidebar-nav-expand">
+                {isDatabasePanelOpen ? "expand_less" : "expand_more"}
+              </span>
             </button>
+            </nav>
+          }
+          {/* {
             <button className="sidebar-nav-link" onClick={() => scrollToSection("benchmarks")} type="button">
               <span className="material-symbols-outlined">speed</span>
               <span>Benchmarks</span>
             </button>
-          </nav> */}
+          </nav> } */}
+
+          <section className={`sidebar-db-panel custom-scrollbar ${isDatabasePanelOpen ? "open" : "collapsed"}`}>
+            <div className="db-inspector-card db-inspector-card-sidebar">
+              <div className="analysis-section-header">
+                <h3 className="analysis-title sidebar-panel-title">Database connection</h3>
+              </div>
+
+              <label className="pane-label">
+                <span>Connection string</span>
+                <textarea
+                  className="pane-textarea sidebar-pane-textarea"
+                  rows={4}
+                  value={inspectConfig.connection_string}
+                  placeholder="postgresql://user:password@host:5432/app_db or mysql://user:password@host:3306/app_db or sqlite:///C:/data/app.db"
+                  onChange={(event) => {
+                    setInspectConfig((current) => ({ ...current, connection_string: event.target.value }));
+                    setConnectionStatus("idle");
+                    setConnectionInfo(null);
+                  }}
+                />
+              </label>
+
+              <div className="analysis-section-header">
+                <button className="link-button" disabled={connectionStatus === "checking" || !inspectConfig.connection_string.trim()} onClick={handleValidateConnection} type="button">
+                  <span className="material-symbols-outlined">link</span>
+                  <span>{connectionStatus === "checking" ? "Checking..." : "Check connection"}</span>
+                </button>
+                <span className="subtle-badge">
+                  {connectionStatus === "valid"
+                    ? "connection valid"
+                    : connectionStatus === "invalid"
+                      ? "connection invalid"
+                      : "not checked"}
+                </span>
+              </div>
+
+              {connectionInfo ? (
+                <div className="notes-block notes-block-muted">
+                  <p>{connectionInfo.message}</p>
+                  <p>
+                    Type: {connectionInfo.database_type} | Database: {connectionInfo.database_name} | Schema: {connectionInfo.schema_name}
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="db-inspector-grid db-inspector-grid-sidebar">
+                <label className="pane-label">
+                  <span>Metadata source</span>
+                  <input className="pane-input" type="text" value="auto from connection string" readOnly />
+                </label>
+
+                <label className="pane-label">
+                  <span>Schema name (optional)</span>
+                  <input
+                    className="pane-input"
+                    type="text"
+                    value={inspectConfig.schema_name}
+                    placeholder="public, analytics, ...; MySQL/SQLite can leave empty"
+                    onChange={(event) => setInspectConfig((current) => ({ ...current, schema_name: event.target.value }))}
+                  />
+                </label>
+
+                <label className="pane-label">
+                  <span>Table filter</span>
+                  <input
+                    className="pane-input"
+                    type="text"
+                    value={inspectConfig.table_filter}
+                    placeholder="orders"
+                    onChange={(event) => setInspectConfig((current) => ({ ...current, table_filter: event.target.value }))}
+                  />
+                </label>
+
+                <label className="pane-label">
+                  <span>Table limit</span>
+                  <input
+                    className="pane-input"
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={inspectConfig.limit_tables}
+                    onChange={(event) =>
+                      setInspectConfig((current) => ({
+                        ...current,
+                        limit_tables: Number(event.target.value) || 25
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+
+              {inspectNotes.length > 0 ? (
+                <div className="notes-block notes-block-muted">
+                  {inspectNotes.map((note, index) => (
+                    <p key={`${note}-${index}`}>{note}</p>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </section>
 
           <div className="sidebar-footer">
             <a href="#support">
@@ -346,13 +580,28 @@ export default function App() {
                   <span className="material-symbols-outlined chip-expand">expand_more</span>
                 </div>
               </div>
+
+              <div className="toolbar-meta">
+                <span>AI:</span>
+                <div className="toolbar-chip">
+                  <span className="material-symbols-outlined chip-icon">smart_toy</span>
+                  <select
+                    value={payload.ai_provider ?? "groq"}
+                    onChange={(event) => setPayload((current) => ({ ...current, ai_provider: event.target.value as ReviewRequest["ai_provider"] }))}
+                  >
+                    <option value="groq">groq</option>
+                    <option value="claude">claude</option>
+                  </select>
+                  <span className="material-symbols-outlined chip-expand">expand_more</span>
+                </div>
+              </div>
             </div>
 
             <div className="toolbar-right">
               <span className={`health-badge ${getHealthClass(health)}`}>API {health}</span>
-              <button className="analyze-button" onClick={handleSubmit} type="button">
+              <button className="analyze-button" disabled={loading || requiresValidatedConnection} onClick={handleSubmit} type="button">
                 <span className="material-symbols-outlined">bolt</span>
-                <span>{loading ? "Phân tích..." : "Phân tích & Tối ưu"}</span>
+                <span>{loading ? "Phân tích..." : requiresValidatedConnection ? "Kiểm tra kết nối trước" : "Phân tích & Tối ưu"}</span>
               </button>
             </div>
           </div>
@@ -388,9 +637,9 @@ export default function App() {
                 <div className="analysis-section-header">
                   <h3 className="analysis-title">
                     <span className="material-symbols-outlined section-icon section-icon-error">report</span>
-                    <span>Báo cáo phân tích</span>
+                    <span>Điểm chậm và vấn đề cần sửa</span>
                   </h3>
-                  <span className="warning-pill">{issueCount} Cảnh báo</span>
+                  <span className="warning-pill">{issueCount} vấn đề</span>
                 </div>
 
                 <div className="issue-stack">
@@ -402,15 +651,17 @@ export default function App() {
                         </span>
                         <div>
                           <p className="risk-title">{issue.title}</p>
+                          <p className="risk-meta">{getSeverityLabel(issue.severity)} · {getCategoryLabel(issue.category)}</p>
                           <p className="risk-copy">{issue.description}</p>
+                          <p className="risk-suggestion">Cách sửa: {issue.suggestion}</p>
                         </div>
                       </article>
                     ))
                   ) : (
                     <article className="risk-card risk-card-empty">
                       <div>
-                        <p className="risk-title">Chưa có vấn đề nào được phát hiện</p>
-                        <p className="risk-copy">Submit query để phân tích các vấn đề tiềm ẩn.</p>
+                        <p className="risk-title">Chưa phát hiện điểm nghẽn rõ ràng</p>
+                        <p className="risk-copy">Nhập query để kiểm tra chỗ chậm, đoạn viết chưa tối ưu và rủi ro có thể lặp lại trong tương lai.</p>
                       </div>
                     </article>
                   )}
@@ -418,13 +669,13 @@ export default function App() {
               </section>
 
               <section className="analysis-section" ref={benchmarksSectionRef}>
-                <h3 className="analysis-title">Dự báo hiệu suất</h3>
+                <h3 className="analysis-title">Ước lượng tác động hiệu năng</h3>
 
                 <div className="estimate-grid">
                   <article className="estimate-card">
                     <p className="estimate-label">Độ trễ(Latency)</p>
                     <p className="estimate-value estimate-value-error">{hasResult ? getLatency(result.score) : "--"}</p>
-                    <p className="estimate-caption">High</p>
+                    <p className="estimate-caption">Cao</p>
                   </article>
                   <article className="estimate-card">
                     <p className="estimate-label">Tải CPU</p>
@@ -444,20 +695,38 @@ export default function App() {
 
               <section className="analysis-section" ref={schemaSectionRef}>
                 <div className="analysis-section-header">
-                  <h3 className="analysis-title analysis-title-primary">Gợi ý tối ưu</h3>
+                  <h3 className="analysis-title analysis-title-primary">SQL đề xuất để cải thiện</h3>
                   <button className="link-button" onClick={handleCopy} type="button">
                     <span className="material-symbols-outlined">content_copy</span>
                     <span>Sao chép</span>
                   </button>
                 </div>
 
-                <div className="optimized-block">
-                  {hasResult && result.optimized_query ? (
+                {result?.optimized_query ? (
+                  <div className="optimized-block">
                     <pre dangerouslySetInnerHTML={{ __html: optimizedHtml }} />
-                  ) : (
-                    <pre>-- No optimized query available</pre>
-                  )}
-                </div>
+                  </div>
+                ) : null}
+
+                {hasResult && !result.optimized_query ? (
+                  <div className="notes-block notes-block-muted">
+                    <p>Chưa có bản rewrite an toàn được tạo tự động. Đang hiển thị query hiện tại để coder tiếp tục chỉnh tay theo các vấn đề đã phát hiện.</p>
+                  </div>
+                ) : null}
+
+                {hasResult && result.index_suggestions.length > 0 ? (
+                  <div className="notes-block">
+                    <p><strong>Index đề xuất</strong></p>
+                    {result.index_suggestions.map((item, index) => (
+                      <div className="index-suggestion-card" key={`${item.index_name}-${index}`}>
+                        <p><strong>{item.index_name}</strong></p>
+                        <p>Cột: {item.columns.join(", ") || "không có"}</p>
+                        <p>{item.reason}</p>
+                        <pre>{item.sql || "-- chưa có câu lệnh SQL được cung cấp"}</pre>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
 
                 <div className="analysis-actions">
                   <button className="secondary-run-button" type="button">
@@ -469,117 +738,15 @@ export default function App() {
 
               <section className="analysis-section">
                 <div className="analysis-section-header">
-                  <h3 className="analysis-title">Summary / Goal</h3>
-                  <span className="subtle-badge">{result?.detected_type ?? payload.database_type}</span>
+                  <h3 className="analysis-title">Tóm tắt cho coder</h3>
+                  <span className="subtle-badge">{getDetectedTypeLabel(result?.detected_type ?? payload.database_type)}</span>
                 </div>
 
                 <div className="notes-block">
-                  <p>{result?.summary ?? "Chưa có summary từ AI review."}</p>
+                  <p>{result?.summary ?? "Chưa có kết luận phân tích."}</p>
                 </div>
 
-                <div className="db-inspector-card">
-                  <div className="analysis-section-header">
-                    <h3 className="analysis-title">Database metadata</h3>
-                    <button className="link-button" disabled={inspecting || !inspectConfig.connection_string.trim()} onClick={handleInspectDatabase} type="button">
-                      <span className="material-symbols-outlined">database</span>
-                      <span>{inspecting ? "Loading..." : "Load schema/index"}</span>
-                    </button>
-                  </div>
-
-                  <label className="pane-label">
-                    <span>Connection string</span>
-                    <textarea
-                      className="pane-textarea"
-                      rows={3}
-                      value={inspectConfig.connection_string}
-                      placeholder="postgresql://user:password@host:5432/app_db or mysql://user:password@host:3306/app_db or sqlite:///C:/data/app.db"
-                      onChange={(event) => {
-                        setInspectConfig((current) => ({ ...current, connection_string: event.target.value }));
-                        setConnectionStatus("idle");
-                        setConnectionInfo(null);
-                      }}
-                    />
-                  </label>
-
-                  <div className="analysis-section-header">
-                    <button className="link-button" disabled={connectionStatus === "checking" || !inspectConfig.connection_string.trim()} onClick={handleValidateConnection} type="button">
-                      <span className="material-symbols-outlined">link</span>
-                      <span>{connectionStatus === "checking" ? "Checking..." : "Check connection"}</span>
-                    </button>
-                    <span className="subtle-badge">
-                      {connectionStatus === "valid"
-                        ? "connection valid"
-                        : connectionStatus === "invalid"
-                          ? "connection invalid"
-                          : "not checked"}
-                    </span>
-                  </div>
-
-                  {connectionInfo ? (
-                    <div className="notes-block notes-block-muted">
-                      <p>{connectionInfo.message}</p>
-                      <p>
-                        Type: {connectionInfo.database_type} | Database: {connectionInfo.database_name} | Schema: {connectionInfo.schema_name}
-                      </p>
-                    </div>
-                  ) : null}
-
-                  <div className="db-inspector-grid">
-                    <label className="pane-label">
-                      <span>Metadata source</span>
-                      <input className="pane-input" type="text" value="auto from connection string" readOnly />
-                    </label>
-
-                    <label className="pane-label">
-                      <span>Schema name (optional)</span>
-                      <input
-                        className="pane-input"
-                        type="text"
-                        value={inspectConfig.schema_name}
-                        placeholder="public, analytics, ...; MySQL/SQLite can leave empty"
-                        onChange={(event) => setInspectConfig((current) => ({ ...current, schema_name: event.target.value }))}
-                      />
-                    </label>
-
-                    <label className="pane-label">
-                      <span>Table filter</span>
-                      <input
-                        className="pane-input"
-                        type="text"
-                        value={inspectConfig.table_filter}
-                        placeholder="orders"
-                        onChange={(event) => setInspectConfig((current) => ({ ...current, table_filter: event.target.value }))}
-                      />
-                    </label>
-
-                    <label className="pane-label">
-                      <span>Table limit</span>
-                      <input
-                        className="pane-input"
-                        type="number"
-                        min={1}
-                        max={100}
-                        value={inspectConfig.limit_tables}
-                        onChange={(event) =>
-                          setInspectConfig((current) => ({
-                            ...current,
-                            limit_tables: Number(event.target.value) || 25
-                          }))
-                        }
-                      />
-                    </label>
-                  </div>
-
-                  {inspectNotes.length > 0 ? (
-                    <div className="notes-block notes-block-muted">
-                      {inspectNotes.map((note, index) => (
-                        <p key={`${note}-${index}`}>{note}</p>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-
-                <label className="pane-label">
+                {/* <label className="pane-label">
                   <span>Schema</span>
                   <textarea
                     className="pane-textarea"
@@ -625,9 +792,12 @@ export default function App() {
                       Indexed columns: {result.input_preview.detected_index_columns.length > 0 ? result.input_preview.detected_index_columns.join(", ") : "none"}
                     </p>
                   </div>
-                ) : null}
+                ) : null} */}
 
                 <div className="notes-block">
+                  {hasResult && result.input_preview.detected_entities.length > 0 ? (
+                    <p><strong>Bảng liên quan:</strong> {result.input_preview.detected_entities.join(", ")}</p>
+                  ) : null}
                   {hasResult && result.improvements.length > 0 ? (
                     result.improvements.map((item, index) => (
                       <p key={`${item}-${index}`}>{item}</p>
@@ -638,6 +808,13 @@ export default function App() {
                 </div>
 
                 <div className="notes-block notes-block-muted">
+                  {hasResult && result.assumptions.length > 0 ? <p><strong>Giả định phân tích:</strong></p> : null}
+                  {hasResult && result.assumptions.length > 0 ? (
+                    result.assumptions.map((item, index) => (
+                      <p key={`${item}-${index}`}>{item}</p>
+                    ))
+                  ) : null}
+                  {hasResult ? <p><strong>Ghi chú để tránh lặp lại:</strong></p> : null}
                   {hasResult && result.notes.length > 0 ? (
                     result.notes.map((note, index) => (
                       <p key={`${note}-${index}`}>{note}</p>
@@ -655,6 +832,21 @@ export default function App() {
       <button className="fab-button" type="button">
         <span className="material-symbols-outlined filled">auto_fix_high</span>
       </button>
+
+      {warningPopup ? (
+        <div className="popup-backdrop" role="dialog" aria-modal="true" aria-labelledby="ai-warning-title">
+          <div className="warning-popup">
+            <div className="warning-popup-header">
+              <span className="material-symbols-outlined warning-popup-icon">warning</span>
+              <h3 id="ai-warning-title">Không thể phân tích bằng AI</h3>
+            </div>
+            <p>{warningPopup}</p>
+            <button className="warning-popup-button" onClick={() => setWarningPopup("")} type="button">
+              Đóng
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

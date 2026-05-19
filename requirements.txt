@@ -3,5 +3,7 @@ pydantic
 uvicorn
 python-dotenv
 openai
+anthropic
+google-genai
 psycopg[binary]
 PyMySQL

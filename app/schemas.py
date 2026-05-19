@@ -7,6 +7,8 @@ DatabaseType = Literal["auto", "mysql", "postgres", "mongodb", "generic_sql", "s
 OptimizationGoal = Literal["general", "speed", "readability", "index", "cost"]
 Severity = Literal["low", "medium", "high", "critical"]
 InspectableDatabaseType = Literal["mysql", "postgres", "sqlite"]
+AIProvider = Literal["gemini", "groq", "claude"]
+IssueCategory = Literal["correctness", "performance", "maintainability", "security", "safety", "readability"]
 
 
 class ReviewRequest(BaseModel):
@@ -15,9 +17,10 @@ class ReviewRequest(BaseModel):
     query: str = Field(..., max_length=10_000)
     database_type: DatabaseType = "auto"
     context: str = Field(default="", max_length=5_000)
-    schema_info: str = Field(default="", alias="schema", max_length=5_000)
-    index_info: str = Field(default="", alias="indexes", max_length=5_000)
+    schema_info: str = Field(default="", alias="schema", max_length=50_000)
+    index_info: str = Field(default="", alias="indexes", max_length=50_000)
     optimization_goal: OptimizationGoal = "general"
+    ai_provider: AIProvider | None = None
     connection_string: str = Field(default="", max_length=2_000)
     metadata_database_type: InspectableDatabaseType | None = None
     schema_name: str = Field(default="", max_length=255)
@@ -28,9 +31,17 @@ class ReviewRequest(BaseModel):
 
 class Issue(BaseModel):
     severity: Severity
+    category: IssueCategory = "performance"
     title: str
     description: str
     suggestion: str
+
+
+class IndexSuggestion(BaseModel):
+    index_name: str
+    columns: list[str]
+    reason: str
+    sql: str
 
 
 class InputPreview(BaseModel):
@@ -76,5 +87,7 @@ class ReviewResponse(BaseModel):
     issues: list[Issue]
     improvements: list[str]
     optimized_query: str | None = None
+    index_suggestions: list[IndexSuggestion] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
     notes: list[str]
     input_preview: InputPreview

@@ -1,6 +1,7 @@
 import re
 
 from app.schemas import Issue
+from app.services.query_tables import extract_table_names
 
 
 def analyze_rules(
@@ -20,6 +21,10 @@ def analyze_rules(
     compact = re.sub(r"\s+", " ", lower).strip()
     schema_tokens = _extract_identifiers(schema_info)
     index_tokens = _extract_identifiers(index_info)
+    query_tables = extract_table_names(query)
+
+    if query_tables:
+        notes.append(f"Bang lien quan trong query: {', '.join(query_tables[:8])}.")
 
     if schema_info.strip():
         notes.append("Da nhan schema bo sung tu nguoi dung de doi chieu rule-based review.")
@@ -32,7 +37,7 @@ def analyze_rules(
         notes.append("Chua co thong tin index cu the; cac goi y index duoc giu o muc an toan.")
 
     if detected_type in {"mysql", "postgres", "generic_sql"}:
-        _analyze_sql(query, compact, detected_type, schema_tokens, index_tokens, issues, improvements, notes)
+        _analyze_sql(query, compact, detected_type, schema_tokens, index_tokens, query_tables, issues, improvements, notes)
     elif detected_type == "mongodb":
         _analyze_mongodb(query, lower, index_tokens, issues, improvements, notes)
     else:
@@ -46,9 +51,12 @@ def analyze_rules(
         )
 
     optimized_query = _suggest_optimized_query(query, compact)
+    notes.extend(_build_prevention_notes(compact, query_tables))
 
     if not improvements:
         improvements.append("Bo sung schema, index, row count va muc tieu toi uu de review chinh xac hon.")
+
+    improvements.extend(_build_prevention_actions(detected_type, compact))
 
     return issues, _dedupe(improvements), _dedupe(notes), optimized_query
 
@@ -63,11 +71,11 @@ def calculate_score(issues: list[Issue]) -> int:
 
 def build_summary(score: int, issues: list[Issue]) -> str:
     if not issues:
-        return "Chua phat hien van de ro rang bang rule-based checks co ban."
+        return "Chua thay diem nghen ro rang trong rule-based review. Van nen kiem tra bang EXPLAIN de xac nhan query thuc te."
     high_count = sum(1 for item in issues if item.severity in {"high", "critical"})
     if high_count:
-        return f"Query co {len(issues)} van de, trong do {high_count} van de rui ro cao/rat nghiem trong. Score hien tai: {score}."
-    return f"Query co {len(issues)} diem can cai thien. Score hien tai: {score}."
+        return f"Query co {len(issues)} van de; {high_count} diem co kha nang gay cham query hoac sai ket qua. Uu tien sua cac muc severity cao truoc. Score hien tai: {score}."
+    return f"Query co {len(issues)} diem can cai thien. Nen toi uu cach viet SQL, index va cach loc/sort de tranh lap lai van de nay. Score hien tai: {score}."
 
 
 def _extract_identifiers(raw: str) -> set[str]:
@@ -101,18 +109,20 @@ def _analyze_sql(
     detected_type: str,
     schema_tokens: set[str],
     index_tokens: set[str],
+    query_tables: list[str],
     issues: list[Issue],
     improvements: list[str],
     notes: list[str],
 ) -> None:
     mentioned_columns = _mentioned_columns(compact, schema_tokens)
+    table_hint = f" Tren cac bang: {', '.join(query_tables[:4])}." if query_tables else ""
 
     if re.search(r"\bselect\s+from\b", compact):
         issues.append(
             Issue(
                 severity="high",
                 title="Cau truy van SQL khong hoan chinh",
-                description="Query co SELECT nhung khong co danh sach cot hop le truoc FROM.",
+                description=f"Query co SELECT nhung khong co danh sach cot hop le truoc FROM.{table_hint}",
                 suggestion="Bo sung cot can truy van truoc FROM va kiem tra lai cu phap SQL.",
             )
         )
@@ -123,7 +133,7 @@ def _analyze_sql(
             Issue(
                 severity="medium",
                 title="Su dung SELECT *",
-                description="SELECT * co the doc nhieu cot khong can thiet va lam tang network/data transfer.",
+                description=f"SELECT * co the doc nhieu cot khong can thiet va lam tang network/data transfer.{table_hint}",
                 suggestion="Chi select cac cot can thiet.",
             )
         )
@@ -134,7 +144,7 @@ def _analyze_sql(
             Issue(
                 severity="critical",
                 title="UPDATE/DELETE thieu WHERE",
-                description="Query UPDATE/DELETE khong co WHERE co the anh huong toan bo bang.",
+                description=f"Query UPDATE/DELETE khong co WHERE co the anh huong toan bo bang.{table_hint}",
                 suggestion="Them WHERE ro rang hoac co co che xac nhan an toan.",
             )
         )
@@ -146,7 +156,7 @@ def _analyze_sql(
             Issue(
                 severity="high",
                 title="LIKE voi wildcard dau chuoi",
-                description="LIKE '%keyword' hoac '%keyword%' thuong khong tan dung duoc index B-tree thong thuong.",
+                description=f"LIKE '%keyword' hoac '%keyword%' thuong khong tan dung duoc index B-tree thong thuong.{table_hint}",
                 suggestion="Can nhac full-text index, search service, hoac thay doi pattern truy van.",
             )
         )
@@ -158,7 +168,7 @@ def _analyze_sql(
             Issue(
                 severity="high",
                 title="ORDER BY random tren tap du lieu lon",
-                description="ORDER BY RAND()/RANDOM() co the phai sort toan bo tap ket qua.",
+                description=f"ORDER BY RAND()/RANDOM() co the phai sort toan bo tap ket qua.{table_hint}",
                 suggestion="Dung chien luoc random theo id hoac precomputed sampling phu hop.",
             )
         )
@@ -168,7 +178,7 @@ def _analyze_sql(
             Issue(
                 severity="low",
                 title="LIMIT khong co ORDER BY",
-                description="Ket qua LIMIT khong co ORDER BY co the khong on dinh giua cac lan chay.",
+                description=f"Ket qua LIMIT khong co ORDER BY co the khong on dinh giua cac lan chay.{table_hint}",
                 suggestion="Them ORDER BY theo tieu chi xac dinh.",
             )
         )
@@ -178,7 +188,7 @@ def _analyze_sql(
             Issue(
                 severity="medium",
                 title="OFFSET lon",
-                description="OFFSET lon co the khien database phai scan hoac bo qua nhieu dong.",
+                description=f"OFFSET lon co the khien database phai scan hoac bo qua nhieu dong.{table_hint}",
                 suggestion="Can nhac keyset pagination/cursor pagination.",
             )
         )
@@ -188,7 +198,7 @@ def _analyze_sql(
             Issue(
                 severity="high",
                 title="JOIN thieu dieu kien ON ro rang",
-                description="JOIN khong co ON ro rang co the tao Cartesian product hoac ket qua sai.",
+                description=f"JOIN khong co ON ro rang co the tao Cartesian product hoac ket qua sai.{table_hint}",
                 suggestion="Bo sung dieu kien JOIN chinh xac.",
             )
         )
@@ -198,7 +208,7 @@ def _analyze_sql(
             Issue(
                 severity="medium",
                 title="Nhieu dieu kien OR",
-                description="Nhieu OR co the lam giam hieu qua su dung index.",
+                description=f"Nhieu OR co the lam giam hieu qua su dung index.{table_hint}",
                 suggestion="Kiem tra execution plan; can nhac UNION hoac index phu hop.",
             )
         )
@@ -242,10 +252,37 @@ def _analyze_sql(
             Issue(
                 severity="medium",
                 title="Query dai hoac nested phuc tap",
-                description="Query dai hoac nhieu nested SELECT co the kho bao tri va kho toi uu.",
+                description=f"Query dai hoac nhieu nested SELECT co the kho bao tri va kho toi uu.{table_hint}",
                 suggestion="Tach logic, dung CTE co kiem soat, hoac phan tich tung phan bang execution plan.",
             )
         )
+
+
+def _build_prevention_notes(compact: str, query_tables: list[str]) -> list[str]:
+    notes: list[str] = []
+    if query_tables:
+        notes.append(f"Uu tien review execution plan cho cac bang: {', '.join(query_tables[:4])}.")
+    if " join " in f" {compact} ":
+        notes.append("Khi query dung JOIN, can review thu tu join, dieu kien ON va index tren cot join.")
+    if " order by " in f" {compact} ":
+        notes.append("Neu query vua WHERE vua ORDER BY, coder nen doi chieu thu tu cot trong composite index.")
+    return notes
+
+
+def _build_prevention_actions(detected_type: str, compact: str) -> list[str]:
+    actions = [
+        "Truoc khi merge, chay EXPLAIN cho query moi hoac query da sua.",
+        "Tranh SELECT * trong code production; chi lay cot can dung.",
+    ]
+    if " join " in f" {compact} ":
+        actions.append("Dat convention review cho JOIN: phai co ON ro rang va index tren cot join chinh.")
+    if " limit " in f" {compact} " and " order by " not in f" {compact} ":
+        actions.append("Voi pagination, luon viet ORDER BY ro rang de ket qua on dinh giua cac lan chay.")
+    if detected_type == "mysql":
+        actions.append("Voi MySQL, uu tien kiem tra composite index theo thu tu loc truoc roi den sap xep.")
+    if detected_type == "postgres":
+        actions.append("Voi PostgreSQL, review them bitmap scan, sequential scan va sort cost trong EXPLAIN ANALYZE.")
+    return actions
 
 
 def _analyze_mongodb(
@@ -333,5 +370,12 @@ def _strip_qualifier(identifier: str) -> str:
 def _suggest_optimized_query(query: str, compact: str) -> str | None:
     # Chi dua goi y an toan cho pattern don gian, khong tu bia schema.
     if re.search(r"\bselect\s+\*", compact):
-        return re.sub(r"(?i)\bselect\s+\*", "SELECT <needed_columns>", query, count=1)
+        rewritten = re.sub(r"(?i)\bselect\s+\*", "SELECT <needed_columns>", query, count=1)
+        if " limit " in f" {compact} " and " order by " not in f" {compact} ":
+            return f"{rewritten}\nORDER BY <stable_column> DESC"
+        return rewritten
+    if " limit " in f" {compact} " and " order by " not in f" {compact} ":
+        return f"{query.rstrip()}\nORDER BY <stable_column> DESC"
+    if re.search(r"\boffset\s+[1-9]\d{3,}", compact):
+        return f"-- Consider keyset pagination instead of large OFFSET\n{query}"
     return None

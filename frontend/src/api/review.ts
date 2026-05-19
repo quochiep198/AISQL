@@ -1,6 +1,7 @@
 export type DatabaseType = "auto" | "mysql" | "postgres" | "mongodb" | "generic_sql" | "sqlite";
 export type OptimizationGoal = "general" | "speed" | "readability" | "index" | "cost";
 export type InspectableDatabaseType = "mysql" | "postgres" | "sqlite";
+export type AIProvider = "gemini" | "groq" | "claude";
 
 export type ReviewRequest = {
   query: string;
@@ -9,6 +10,7 @@ export type ReviewRequest = {
   schema: string;
   indexes: string;
   optimization_goal: OptimizationGoal;
+  ai_provider: AIProvider | null;
   connection_string: string;
   metadata_database_type: InspectableDatabaseType | null;
   schema_name: string;
@@ -19,9 +21,17 @@ export type ReviewRequest = {
 
 export type Issue = {
   severity: "low" | "medium" | "high" | "critical";
+  category: "correctness" | "performance" | "maintainability" | "security" | "safety" | "readability";
   title: string;
   description: string;
   suggestion: string;
+};
+
+export type IndexSuggestion = {
+  index_name: string;
+  columns: string[];
+  reason: string;
+  sql: string;
 };
 
 export type InputPreview = {
@@ -67,6 +77,8 @@ export type ReviewResponse = {
   issues: Issue[];
   improvements: string[];
   optimized_query: string | null;
+  index_suggestions: IndexSuggestion[];
+  assumptions: string[];
   notes: string[];
   input_preview: InputPreview;
 };

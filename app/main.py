@@ -5,14 +5,15 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.schemas import ConnectionValidationResponse, DatabaseInspectRequest, DatabaseInspectResponse, ReviewRequest, ReviewResponse
-from app.services.ai_reviewer import review_with_ai
+from app.services.ai_reviewer import AIReviewError, review_with_ai
 from app.services.context_builder import build_review_context
 from app.services.db_metadata import infer_database_type_from_connection_string, inspect_database_metadata
 from app.services.detector import detect_query_type
 from app.services.input_preview import build_input_preview
 from app.services.query_tables import extract_table_names
 from app.services.rule_analyzer import analyze_rules, build_summary, calculate_score
-from app.utils.sanitizer import normalize_query
+from app.services.sql_syntax import validate_sql_syntax
+from app.utils.sanitizer import has_meaningful_sql_change, normalize_query
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -103,17 +104,50 @@ async def review(payload: ReviewRequest) -> ReviewResponse:
         index_info=index_info,
     )
 
-    ai_result = await review_with_ai(
-        database_type=detected_type,
-        query=query,
-        context=review_context,
-        optimization_goal=payload.optimization_goal,
-        schema_info=schema_info,
-        index_info=index_info,
-    )
+    syntax_issues = validate_sql_syntax(query, detected_type)
+    if syntax_issues:
+        syntax_notes = [
+            *auto_notes,
+            "Phát hiện lỗi cú pháp SQL trước khi chạy review tối ưu.",
+            "Cần sửa lỗi syntax trước, sau đó mới đánh giá chính xác về hiệu năng và index.",
+        ]
+        syntax_improvements = [
+            "Sửa toàn bộ lỗi cú pháp đang được chỉ ra trong phần vấn đề.",
+            "Sau khi query chạy được, chạy lại review để nhận gợi ý tối ưu và index chính xác hơn.",
+        ]
+        syntax_score = calculate_score(syntax_issues)
+        return ReviewResponse(
+            detected_type=detected_type,
+            score=syntax_score,
+            summary="Query đang có lỗi cú pháp, nên chưa thể phân tích tối ưu một cách đáng tin cậy.",
+            issues=syntax_issues,
+            improvements=syntax_improvements,
+            optimized_query=None,
+            index_suggestions=[],
+            assumptions=["Chưa thực hiện AI review hoặc rule-based optimization sâu vì query chưa hợp lệ về cú pháp."],
+            notes=syntax_notes,
+            input_preview=input_preview,
+        )
+
+    ai_error_note: str | None = None
+    try:
+        ai_result = await review_with_ai(
+            database_type=detected_type,
+            query=query,
+            context=review_context,
+            optimization_goal=payload.optimization_goal,
+            schema_info=schema_info,
+            index_info=index_info,
+            ai_provider=payload.ai_provider,
+        )
+    except AIReviewError as exc:
+        ai_result = None
+        ai_error_note = str(exc)
 
     if ai_result:
         try:
+            if not has_meaningful_sql_change(query, ai_result.get("optimized_query")):
+                ai_result["optimized_query"] = None
             ai_result["input_preview"] = input_preview.model_dump()
             ai_result["notes"] = [*auto_notes, *ai_result.get("notes", [])]
             return ReviewResponse(**ai_result)
@@ -127,9 +161,14 @@ async def review(payload: ReviewRequest) -> ReviewResponse:
         index_info=index_info,
     )
     score = calculate_score(issues)
+    if not has_meaningful_sql_change(query, optimized_query):
+        optimized_query = None
 
     if ai_result:
         notes.append("AI review response was invalid; using rule-based result.")
+    if ai_error_note:
+        notes.append(ai_error_note)
+        notes.append("AI review khong kha dung; da fallback sang rule-based review.")
 
     return ReviewResponse(
         detected_type=detected_type,
@@ -138,6 +177,8 @@ async def review(payload: ReviewRequest) -> ReviewResponse:
         issues=issues,
         improvements=improvements,
         optimized_query=optimized_query,
+        index_suggestions=[],
+        assumptions=[],
         notes=[*auto_notes, *notes],
         input_preview=input_preview,
     )
